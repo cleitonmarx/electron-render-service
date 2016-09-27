@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 const pjson = require('../package.json');
 const { BrowserWindow } = require('electron');
+const ipc = require('electron').ipcMain;
 const retry = require('retry');
 
 const { validateResult } = require('./error_handler');
@@ -20,6 +21,7 @@ function renderPDF(options, done) {
     const selector = 'document.querySelectorAll(\'link[rel="stylesheet"][media="print"]\')';
     const code = `Array.prototype.forEach.call(${selector}, s => s.remove());`;
     this.webContents.executeJavaScript(code);
+    
   }
 
   // Support setting page size in microns with NxN syntax
@@ -37,10 +39,13 @@ function renderPDF(options, done) {
 /**
  * Render image png/jpeg
  */
-function renderImage({ type, quality, browserWidth, browserHeight, clippingRect }, done) {
+function renderImage({ type, quality, clippingRect, browserWidth, browserHeight, target, targetSize }, done) {
   const handleCapture = image => done(null, type === 'png' ? image.toPng() : image.toJpeg(quality));
-
-  if (clippingRect) {
+  var timeout = 0;
+  if (target){
+    this.setSize(targetSize.width, targetSize.height);
+    setTimeout(() => this.capturePage(handleCapture), 50);
+  } else if (clippingRect) {
     // Avoid stretching by adding rect coordinates to size
     this.setSize(browserWidth + clippingRect.x, browserHeight + clippingRect.y);
     setTimeout(() => this.capturePage(clippingRect, handleCapture), 50);
@@ -49,6 +54,7 @@ function renderImage({ type, quality, browserWidth, browserHeight, clippingRect 
     setTimeout(() => this.capturePage(handleCapture), 50);
   }
 }
+
 
 /**
  * Render job with error handling
@@ -70,10 +76,11 @@ exports.renderWorker = function renderWorker(window, task, done) {
 
   webContents.once('finished', (type, ...args) => {
     clearTimeout(timeoutTimer);
-
+    
     function renderIt() {
       validateResult(task.url, type, ...args)
         // Page loaded successfully
+        
         .then(() => (task.type === 'pdf' ? renderPDF : renderImage).call(window, task, done))
         .catch(ex => done(ex));
     }
@@ -82,12 +89,12 @@ exports.renderWorker = function renderWorker(window, task, done) {
     if (task.delay > 0) {
       console.log('delaying pdf generation by %sms', task.delay * 1000);
       setTimeout(renderIt, task.delay * 1000);
-
+    
     // Look for specific string before rendering
     } else if (task.waitForText) {
       console.log('delaying pdf generation, waiting for text "%s" to appear', task.waitForText);
       waitOperation.attempt(() => webContents.findInPage(task.waitForText));
-
+      
       webContents.on('found-in-page', function foundInPage(event, result) {
         if (result.matches === 0) {
           waitOperation.retry(new Error('not ready to render'));
@@ -100,6 +107,29 @@ exports.renderWorker = function renderWorker(window, task, done) {
           renderIt();
         }
       });
+    } else if (task.target){
+      ipc.on('target_size_received', function targetSizeReceived(event, targetSize) {
+        if (targetSize) {
+          task.targetSize = targetSize;
+        }
+        ipc.removeListener('target_size_received', targetSizeReceived);
+        renderIt();
+      });
+
+      webContents.executeJavaScript(`
+        var ipc = require('electron').ipcRenderer
+        var target = document.getElementById('`+task.target+`')
+        if (target != null) {
+          var targetSize = {
+            width: target.offsetWidth,
+            height: target.offsetHeight
+          };
+          ipc.send('target_size_received',targetSize);
+        } else {
+          ipc.send('target_size_received', {width:0, height:0});        
+        }
+    `); 
+
     } else {
       renderIt();
     }

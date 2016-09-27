@@ -32,7 +32,7 @@ app.use(morgan(`[:date[iso]] :key-label@:remote-addr - :method :status
 app.disable('x-powered-by');
 app.enable('trust proxy');
 
-app.post(/^\/(pdf|png|jpeg)/, auth, (req, res, next) => {
+app.post(/^\/(pdf|png|jpeg)/, auth , (req, res, next) => {
   const tmpFile = path.join('/tmp/', `${(new Date()).toUTCString()}-${process.pid}-${
       ((Math.random() * 0x100000000) + 1).toString(36)}.html`);
 
@@ -66,7 +66,7 @@ app.post(/^\/(pdf|png|jpeg)/, auth, (req, res, next) => {
  *
  * See more at https://git.io/vwDaJ
  */
-app.get('/pdf', auth, (req, res) => {
+app.get('/pdf', auth,  (req, res) => {
   req.check({
     pageSize: { // Specify page size of the generated PDF
       optional: true,
@@ -143,7 +143,7 @@ app.get('/pdf', auth, (req, res) => {
 /**
  * GET /png|jpeg - Render png or jpeg
  */
-app.get(/^\/(png|jpeg)/, auth, (req, res) => {
+app.get(/^\/(png|jpeg)/, auth,  (req, res) => {
   const type = req.params[0];
   req.check({
     quality: { // JPEG quality
@@ -161,6 +161,9 @@ app.get(/^\/(png|jpeg)/, auth, (req, res) => {
     waitForText: { // Specify a specific string of text to find before generating the PDF
       optional: true, notEmpty: true,
     },
+    target: {
+      optional: true, notEmpty: true,
+    }
   });
 
   if (!res.locals.tmpFile && !(req.query.url && req.query.url.match(/^https?:\/\/.+$/i))) {
@@ -199,7 +202,7 @@ app.get(/^\/(png|jpeg)/, auth, (req, res) => {
   }
 
   const { quality = 80, delay, waitForText, clippingRect,
-    browserWidth = WINDOW_WIDTH, browserHeight = WINDOW_HEIGHT } = req.query;
+    browserWidth = WINDOW_WIDTH, browserHeight = WINDOW_HEIGHT, target } = req.query;
   const url = (res.locals.tmpFile ? `file://${res.locals.tmpFile}` : req.query.url);
 
   req.app.pool.enqueue({
@@ -211,6 +214,7 @@ app.get(/^\/(png|jpeg)/, auth, (req, res) => {
     clippingRect,
     browserWidth: Math.min(browserWidth, LIMIT), // Cap width and height to avoid overload
     browserHeight: Math.min(browserHeight, LIMIT),
+    target,
   }, (err, buffer) => {
     if (res.locals.tmpFile) {
       fs.unlink(res.locals.tmpFile, () => {});
@@ -226,7 +230,7 @@ app.get(/^\/(png|jpeg)/, auth, (req, res) => {
 /**
  * GET /stats - Output some stats as JSON
  */
-app.get('/stats', auth, (req, res) => {
+app.get('/stats', /*auth,*/  (req, res) => {
   if (req.keyLabel !== 'global') return res.sendStatus(403);
   return res.send(req.app.pool.stats());
 });
