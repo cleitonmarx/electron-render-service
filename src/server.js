@@ -13,6 +13,7 @@ electronApp.commandLine.appendSwitch('disable-gpu');
 const WindowPool = require('./window_pool');
 const auth = require('./auth');
 const { printUsage, printBootMessage, handleErrors, setContentDisposition } = require('./util');
+const tempfile = require('tempfile');
 
 const HOSTNAME = process.env.HOSTNAME || '0.0.0.0';
 const PORT = process.env.PORT || 3000;
@@ -32,15 +33,19 @@ app.use(morgan(`[:date[iso]] :key-label@:remote-addr - :method :status
 app.disable('x-powered-by');
 app.enable('trust proxy');
 
-app.post(/^\/(pdf|png|jpeg)/, auth , (req, res, next) => {
-  const tmpFile = path.join('/tmp/', `${(new Date()).toUTCString()}-${process.pid}-${
-      ((Math.random() * 0x100000000) + 1).toString(36)}.html`);
+app.post(/^\/(pdf|png|jpeg)/, auth, (req, res, next) => {
+  // const tmpFile = path.join('/tmp/', `${(new Date()).toUTCString()}-${process.pid}-${
+  //     ((Math.random() * 0x100000000) + 1).toString(36)}.html`);
+  const tmpFile = tempfile(".html");
 
-  const writeStream = fs.createWriteStream(tmpFile);
-  req.pipe(writeStream);
+  var fullBody = '';
+  req.on('data', function (chunk) {
+    // append the current chunk of data to the fullBody variable
+    fullBody += chunk.toString();
+  });
 
-  writeStream.on('finish', () => {
-    if (!fs.statSync(tmpFile).size) {
+  req.on('end', function () {
+    if (fullBody.length < 1) {
       res.status(400).send({
         input_errors: [
           {
@@ -52,13 +57,48 @@ app.post(/^\/(pdf|png|jpeg)/, auth , (req, res, next) => {
       return;
     }
 
+
+    console.log("Write file: " + tmpFile)
+    fs.writeFileSync(tmpFile, fullBody, 'utf8');
+    //console.log("Saved? " + saved)
+    //console.log(fullBody)
+
+
     // continue as a regular GET request
     /* eslint-disable no-param-reassign */
     req.method = 'GET';
     res.locals.tmpFile = tmpFile;
     /* eslint-enable no-param-reassign */
-    next();
-  });
+    // Sleep to wait the file to be writed
+    next()
+
+  })
+
+  // const writeStream = fs.createWriteStream(tmpFile);
+
+  // writeStream.on('finish', () => {
+  //   if (!fs.statSync(tmpFile).size) {
+  //     res.status(400).send({
+  //       input_errors: [
+  //         {
+  //           param: 'body',
+  //           msg: 'Please post raw HTML',
+  //         },
+  //       ],
+  //     });
+  //     return;
+  //   }
+
+  //   // continue as a regular GET request
+  //   /* eslint-disable no-param-reassign */
+  //   req.method = 'GET';
+  //   res.locals.tmpFile = tmpFile;
+  //   /* eslint-enable no-param-reassign */
+  //   next();
+  // });
+
+  // req.pipe(writeStream);
+
 });
 
 /**
@@ -66,7 +106,7 @@ app.post(/^\/(pdf|png|jpeg)/, auth , (req, res, next) => {
  *
  * See more at https://git.io/vwDaJ
  */
-app.get('/pdf', auth,  (req, res) => {
+app.get('/pdf', auth, (req, res) => {
   req.check({
     pageSize: { // Specify page size of the generated PDF
       optional: true,
@@ -101,10 +141,12 @@ app.get('/pdf', auth,  (req, res) => {
   }
 
   if (!res.locals.tmpFile && !(req.query.url && req.query.url.match(/^https?:\/\/.+$/i))) {
-    res.status(400).send({ input_errors: [{
-      param: 'url',
-      msg: 'Please provide url or send HTML via POST',
-    }] });
+    res.status(400).send({
+      input_errors: [{
+        param: 'url',
+        msg: 'Please provide url or send HTML via POST',
+      }]
+    });
     return;
   }
 
@@ -130,7 +172,11 @@ app.get('/pdf', auth,  (req, res) => {
     waitForText,
   }, (err, buffer) => {
     if (res.locals.tmpFile) {
-      fs.unlink(res.locals.tmpFile, () => {});
+      console.log(res.locals.tmpFile)
+      if (err) {
+        console.log(err)
+      }
+      fs.unlink(res.locals.tmpFile, () => { });
     }
     if (handleErrors(err, req, res)) return;
 
@@ -143,7 +189,7 @@ app.get('/pdf', auth,  (req, res) => {
 /**
  * GET /png|jpeg - Render png or jpeg
  */
-app.get(/^\/(png|jpeg)/, auth,  (req, res) => {
+app.get(/^\/(png|jpeg)/, auth, (req, res) => {
   const type = req.params[0];
   req.check({
     quality: { // JPEG quality
@@ -167,10 +213,11 @@ app.get(/^\/(png|jpeg)/, auth,  (req, res) => {
   });
 
   if (!res.locals.tmpFile && !(req.query.url && req.query.url.match(/^https?:\/\/.+$/i))) {
-    res.status(400).send({ input_errors: [{
-      param: 'url',
-      msg: 'Please provide url or send HTML via POST',
-    }],
+    res.status(400).send({
+      input_errors: [{
+        param: 'url',
+        msg: 'Please provide url or send HTML via POST',
+      }],
     });
     return;
   }
@@ -217,7 +264,7 @@ app.get(/^\/(png|jpeg)/, auth,  (req, res) => {
     target,
   }, (err, buffer) => {
     if (res.locals.tmpFile) {
-      fs.unlink(res.locals.tmpFile, () => {});
+      fs.unlink(res.locals.tmpFile, () => { });
     }
     if (handleErrors(err, req, res)) return;
 
@@ -230,8 +277,8 @@ app.get(/^\/(png|jpeg)/, auth,  (req, res) => {
 /**
  * GET /stats - Output some stats as JSON
  */
-app.get('/stats', /*auth,*/  (req, res) => {
-  if (req.keyLabel !== 'global') return res.sendStatus(403);
+app.get('/stats', /*auth,*/(req, res) => {
+  //if (req.keyLabel !== 'global') return res.sendStatus(403);
   return res.send(req.app.pool.stats());
 });
 
