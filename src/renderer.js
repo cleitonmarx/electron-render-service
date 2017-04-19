@@ -118,7 +118,7 @@ exports.renderWorker = function renderWorker(window, task, done) {
 
       webContents.executeJavaScript(`
         var domReady = function(callback) {
-          document.readyState === "interactive" || document.readyState === "complete" ? callback() : document.addEventListener("DOMContentLoaded", callback);
+          document.readyState === "interactive" || document.readyState === "complete" ? callback() : window.addEventListener("load", callback);
         };
 
         var ipc = require('electron').ipcRenderer

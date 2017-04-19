@@ -7,7 +7,7 @@ MAINTAINER Mihkel Sokk <mihkelsokk@gmail.com>
 
 WORKDIR /app
 EXPOSE 3000
-CMD xvfb-run --server-args="-screen 0 ${WINDOW_WIDTH}x${WINDOW_HEIGHT}x24" ./electron --disable-gpu src/server.js
+CMD ["sh", "-c", "[ -e /tmp/.X99-lock ] && rm /tmp/.X99-lock; xvfb-run -e /dev/stdout --server-args=\"-screen 0 ${WINDOW_WIDTH}x${WINDOW_HEIGHT}x24\" ./electron --disable-gpu src/server.js"]
 
 # Add subpixel hinting
 COPY .fonts.conf /root/.fonts.conf
@@ -20,7 +20,7 @@ RUN sed -i 's/main/main contrib/g' /etc/apt/sources.list && \
 
 #RENDERER_ACCESS_KEY=changeme
 ENV  CONCURRENCY=1 WINDOW_WIDTH=1024 WINDOW_HEIGHT=768 NODE_ENV=production \
-    ELECTRON_VERSION=1.4.1 ELECTRON_ENABLE_STACK_DUMPING=true ELECTRON_ENABLE_LOGGING=true 
+    ELECTRON_VERSION=1.6.6 ELECTRON_ENABLE_STACK_DUMPING=true ELECTRON_ENABLE_LOGGING=true 
 
     # Get Electron
 RUN    wget "https://github.com/atom/electron/releases/download/v${ELECTRON_VERSION}/electron-v${ELECTRON_VERSION}-linux-x64.zip" -O electron.zip && \
