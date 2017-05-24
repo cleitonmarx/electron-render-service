@@ -118,7 +118,7 @@ exports.renderWorker = function renderWorker(window, task, done) {
 
       webContents.executeJavaScript(`
         var domReady = function(callback) {
-          document.readyState === "interactive" || document.readyState === "complete" ? callback() : window.addEventListener("load", callback);
+          document.readyState === "complete" ? callback() : window.addEventListener("load", callback);
         };
 
         var ipc = require('electron').ipcRenderer
@@ -131,7 +131,7 @@ exports.renderWorker = function renderWorker(window, task, done) {
             };
             ipc.send('target_size_received',targetSize);
           } else {
-            ipc.send('target_size_received', {width:0, height:0});        
+            ipc.send('target_size_received', {width:0, height:0});
           }
         });
     `);
@@ -144,7 +144,7 @@ exports.renderWorker = function renderWorker(window, task, done) {
 
       webContents.executeJavaScript(`
         var domReady = function(callback) {
-          document.readyState === "interactive" || document.readyState === "complete" ? callback() : document.addEventListener("DOMContentLoaded", callback);
+          document.readyState === "complete" ? callback() : document.addEventListener("load", callback);
         };
         var ipc = require('electron').ipcRenderer
         domReady(function(){
