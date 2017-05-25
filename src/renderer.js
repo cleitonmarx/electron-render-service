@@ -43,8 +43,14 @@ function renderImage({ type, quality, clippingRect, browserWidth, browserHeight,
   const handleCapture = image => done(null, type === 'png' ? image.toPng() : image.toJpeg(quality));
   var timeout = 0;
   if (target) {
-    this.setSize(targetSize.width, targetSize.height);
-    setTimeout(() => this.capturePage(handleCapture), 50);
+    currentSize = this.getSize()
+    if (targetSize.width == currentSize[0] && targetSize.height == currentSize[1]) {
+      setTimeout(() => this.capturePage(handleCapture), 100);
+    } else {
+      this.setSize(targetSize.width, targetSize.height);
+      setTimeout(() => this.capturePage(handleCapture), 1000);
+    }
+
   } else if (clippingRect) {
     // Avoid stretching by adding rect coordinates to size
     this.setSize(browserWidth + clippingRect.x, browserHeight + clippingRect.y);
@@ -80,7 +86,6 @@ exports.renderWorker = function renderWorker(window, task, done) {
     function renderIt() {
       validateResult(task.url, type, ...args)
         // Page loaded successfully
-
         .then(() => (task.type === 'pdf' ? renderPDF : renderImage).call(window, task, done))
         .catch(ex => done(ex));
     }
